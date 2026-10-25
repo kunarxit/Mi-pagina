@@ -1,0 +1,563 @@
+local teamCheck = false
+local fov = 100
+local smoothing = 1
+local predictionFactor = 0.08  -- Adjust this factor to improve prediction accuracy
+local highlightEnabled = false  -- Variable to enable or disable target highlighting. Change to False if using an ESP script.
+local lockPart = "Head"  -- Choose what part it locks onto. Ex. HumanoidRootPart or Head
+
+local Toggle = true  -- Enable or disable toggle mode
+local ToggleKey = Enum.KeyCode.E  -- Tecla del aimbot (rebindeable desde la GUI)
+
+local throughWalls = true  -- true = apunta a traves de paredes, false = solo con linea de vision
+
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+
+StarterGui:SetCore("SendNotification", {
+    Title = "Universal Aimbot";
+    Text = "made by bran-bon";
+    Duration = 5;
+})
+
+--==================================================================
+-- ALIADOS: jugadores marcados aqui NO son auto-apuntados
+--==================================================================
+local allies = {}  -- [Player] = true
+
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = true
+FOVring.Thickness = 1
+FOVring.Radius = fov
+FOVring.Transparency = 0.8
+FOVring.Color = Color3.fromRGB(255, 128, 128)
+FOVring.Position = workspace.CurrentCamera.ViewportSize / 2
+
+--==================================================================
+-- GUI (abre/cierra con la tecla GUI, por defecto RightShift)
+--==================================================================
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local function corner(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 6)
+    c.Parent = obj
+end
+
+local allyGui = Instance.new("ScreenGui")
+allyGui.Name = "UniversalAimbotGUI"
+allyGui.ResetOnSpawn = false
+allyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+allyGui.Parent = playerGui
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 250, 0, 430)
+main.Position = UDim2.new(0, 20, 0.5, -215)
+main.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
+main.BorderSizePixel = 0
+main.Visible = false
+main.Active = true
+main.Parent = allyGui
+corner(main, 8)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 28)
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+title.BorderSizePixel = 0
+title.Text = "AIMBOT  -  [RightShift]"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.Parent = main
+corner(title, 8)
+
+local function mkRow(y, h)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -12, 0, h or 26)
+    f.Position = UDim2.new(0, 6, 0, y)
+    f.BackgroundTransparency = 1
+    f.Parent = main
+    return f
+end
+
+local function mkBtn(parent, text, x, w, color)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(w, 0, 1, 0)
+    b.Position = UDim2.new(x, 0, 0, 0)
+    b.BackgroundColor3 = color
+    b.BorderSizePixel = 0
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.Font = Enum.Font.GothamMedium
+    b.TextSize = 12
+    b.TextScaled = false
+    b.Parent = parent
+    corner(b, 6)
+    return b
+end
+
+local btnRow = mkRow(32)
+local markTeamBtn = mkBtn(btnRow, "Marcar equipo", 0, 0.48, Color3.fromRGB(45, 90, 150))
+local clearBtn = mkBtn(btnRow, "Limpiar", 0.52, 0.48, Color3.fromRGB(150, 60, 60))
+
+-- Fila de opciones del aimbot
+local optRow = mkRow(62)
+local wallBtn = mkBtn(optRow, "Apuntar por paredes", 0, 1, Color3.fromRGB(38, 128, 62))
+
+local function refreshWallBtn()
+    if throughWalls then
+        wallBtn.Text = "Apuntar por paredes: ON"
+        wallBtn.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
+    else
+        wallBtn.Text = "Apuntar por paredes: OFF"
+        wallBtn.BackgroundColor3 = Color3.fromRGB(120, 42, 42)
+    end
+end
+
+wallBtn.MouseButton1Click:Connect(function()
+    throughWalls = not throughWalls
+    refreshWallBtn()
+end)
+
+--=========================== SLIDER DE FOV ===========================
+local fovRow = mkRow(90, 18)
+local fovLabel = Instance.new("TextLabel")
+fovLabel.Size = UDim2.new(1, 0, 1, 0)
+fovLabel.BackgroundTransparency = 1
+fovLabel.Text = "Tamano de FOV: " .. fov
+fovLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
+fovLabel.Font = Enum.Font.GothamMedium
+fovLabel.TextSize = 12
+fovLabel.TextXAlignment = Enum.TextXAlignment.Left
+fovLabel.Parent = fovRow
+
+local function makeSlider(parent, y, min, max, default, onChange)
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -12, 0, 18)
+    track.Position = UDim2.new(0, 6, 0, y)
+    track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    track.BorderSizePixel = 0
+    track.Active = true
+    track.Parent = parent
+    corner(track, 9)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(80, 140, 220)
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    corner(fill, 9)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(0, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(235, 235, 245)
+    knob.BorderSizePixel = 0
+    knob.Parent = track
+    corner(knob, 7)
+
+    local dragging = false
+
+    local function setFromX(x)
+        local rel = (x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1)
+        rel = math.clamp(rel, 0, 1)
+        local value = math.floor(min + (max - min) * rel + 0.5)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        onChange(value)
+    end
+
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    local rel0 = (default - min) / (max - min)
+    fill.Size = UDim2.new(rel0, 0, 1, 0)
+    knob.Position = UDim2.new(rel0, 0, 0.5, 0)
+    onChange(default)
+end
+
+makeSlider(main, 112, 20, 500, fov, function(v)
+    fov = v
+    fovLabel.Text = "Tamano de FOV: " .. v
+    FOVring.Radius = v
+end)
+
+--=========================== REBINDEO DE TECLAS ===========================
+local guiKey = Enum.KeyCode.RightShift
+local listening = nil  -- nil | "gui" | "aim"
+
+local keyRow = mkRow(140)
+local guiKeyBtn = mkBtn(keyRow, "Tecla GUI", 0, 0.48, Color3.fromRGB(60, 60, 100))
+local aimKeyBtn = mkBtn(keyRow, "Tecla Aimbot", 0.52, 0.48, Color3.fromRGB(60, 60, 100))
+
+local function refreshKeys()
+    if listening == "gui" then
+        guiKeyBtn.Text = "Presiona tecla..."
+        guiKeyBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
+    else
+        guiKeyBtn.Text = "Tecla GUI: " .. guiKey.Name
+        guiKeyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+    end
+
+    if listening == "aim" then
+        aimKeyBtn.Text = "Presiona tecla..."
+        aimKeyBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
+    else
+        aimKeyBtn.Text = "Tecla Aimbot: " .. ToggleKey.Name
+        aimKeyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+    end
+
+    title.Text = "AIMBOT  -  [" .. guiKey.Name .. "]"
+end
+
+guiKeyBtn.MouseButton1Click:Connect(function()
+    listening = (listening == "gui") and nil or "gui"
+    refreshKeys()
+end)
+
+aimKeyBtn.MouseButton1Click:Connect(function()
+    listening = (listening == "aim") and nil or "aim"
+    refreshKeys()
+end)
+
+local list = Instance.new("ScrollingFrame")
+list.Size = UDim2.new(1, -12, 1, -208)
+list.Position = UDim2.new(0, 6, 0, 174)
+list.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 4
+list.CanvasSize = UDim2.new(0, 0, 0, 0)
+list.Parent = main
+corner(list, 6)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.Parent = list
+
+local pad = Instance.new("UIPadding")
+pad.PaddingLeft = UDim.new(0, 4)
+pad.PaddingRight = UDim.new(0, 4)
+pad.PaddingTop = UDim.new(0, 4)
+pad.Parent = list
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    list.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+end)
+
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(1, -12, 0, 16)
+hint.Position = UDim2.new(0, 6, 1, -20)
+hint.BackgroundTransparency = 1
+hint.Text = "Clic = aliado/enemigo   |   Escape cancela el rebindeo"
+hint.TextColor3 = Color3.fromRGB(150, 150, 160)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 10
+hint.Parent = main
+
+local rows = {}
+
+local function refresh(plr)
+    local r = rows[plr]
+    if not r then return end
+    if allies[plr] then
+        r.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
+        r.Text = "  ALIADO   " .. plr.Name
+    else
+        r.BackgroundColor3 = Color3.fromRGB(120, 42, 42)
+        r.Text = "  ENEMIGO  " .. plr.Name
+    end
+end
+
+local function addRow(plr)
+    if rows[plr] then return end
+    local r = Instance.new("TextButton")
+    r.Name = plr.Name
+    r.Size = UDim2.new(1, -8, 0, 26)
+    r.BackgroundColor3 = Color3.fromRGB(120, 42, 42)
+    r.BorderSizePixel = 0
+    r.TextColor3 = Color3.fromRGB(255, 255, 255)
+    r.TextXAlignment = Enum.TextXAlignment.Left
+    r.Font = Enum.Font.GothamMedium
+    r.TextSize = 12
+    r.Text = "  " .. plr.Name
+    r.Parent = list
+    corner(r, 6)
+    rows[plr] = r
+
+    r.MouseButton1Click:Connect(function()
+        if allies[plr] then
+            allies[plr] = nil
+        else
+            allies[plr] = true
+        end
+        refresh(plr)
+    end)
+
+    refresh(plr)
+end
+
+local function buildList()
+    for _, r in pairs(rows) do r:Destroy() end
+    rows = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Players.LocalPlayer then
+            addRow(plr)
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(plr)
+    addRow(plr)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if rows[plr] then
+        rows[plr]:Destroy()
+        rows[plr] = nil
+    end
+    allies[plr] = nil
+end)
+
+markTeamBtn.MouseButton1Click:Connect(function()
+    local lp = Players.LocalPlayer
+    if not lp.Team then return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Team == lp.Team then
+            allies[plr] = true
+            refresh(plr)
+        end
+    end
+end)
+
+clearBtn.MouseButton1Click:Connect(function()
+    for plr in pairs(allies) do
+        allies[plr] = nil
+    end
+    for plr in pairs(rows) do
+        refresh(plr)
+    end
+end)
+
+--=========================== INPUT GLOBAL ===========================
+UserInputService.InputBegan:Connect(function(input, gp)
+    -- Modo rebindeo: captura la siguiente tecla
+    if listening then
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+        if input.KeyCode == Enum.KeyCode.Escape then
+            listening = nil
+        elseif input.KeyCode == Enum.KeyCode.Unknown then
+            return
+        else
+            if listening == "gui" then
+                if input.KeyCode == ToggleKey then ToggleKey = guiKey end
+                guiKey = input.KeyCode
+            else
+                if input.KeyCode == guiKey then guiKey = ToggleKey end
+                ToggleKey = input.KeyCode
+            end
+            listening = nil
+        end
+
+        refreshKeys()
+        return
+    end
+
+    -- Abrir/cerrar GUI con la tecla configurada
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == guiKey then
+        main.Visible = not main.Visible
+    end
+end)
+
+-- Arrastrar la ventana
+local dragging, dragStart, startPos
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+buildList()
+refreshWallBtn()
+refreshKeys()
+
+--==================================================================
+-- AIMBOT
+--==================================================================
+local currentTarget = nil
+local aimbotEnabled = true
+local toggleState = false
+local debounce = false
+
+local losParams = RaycastParams.new()
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function hasLineOfSight(char)
+    local part = char:FindFirstChild(lockPart)
+    if not part then return false end
+
+    local origin = workspace.CurrentCamera.CFrame.Position
+    local dir = part.Position - origin
+
+    local filter = { char }
+    if Players.LocalPlayer.Character then
+        table.insert(filter, Players.LocalPlayer.Character)
+    end
+    losParams.FilterDescendantsInstances = filter
+
+    local hit = workspace:Raycast(origin, dir, losParams)
+    if not hit then return true end
+    return (hit.Position - origin).Magnitude >= dir.Magnitude - 0.5
+end
+
+local function getClosest(cframe)
+    local ray = Ray.new(cframe.Position, cframe.LookVector).Unit
+    local target = nil
+    local mag = math.huge
+    local screenCenter = workspace.CurrentCamera.ViewportSize / 2
+
+    for i, v in pairs(Players:GetPlayers()) do
+        if v.Character and v.Character:FindFirstChild(lockPart) and v.Character:FindFirstChild("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") and v ~= Players.LocalPlayer and not allies[v] and (v.Team ~= Players.LocalPlayer.Team or (not teamCheck)) then
+            local screenPoint, onScreen = workspace.CurrentCamera:WorldToViewportPoint(v.Character[lockPart].Position)
+            local distanceFromCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+
+            if onScreen and distanceFromCenter <= fov then
+                local visible = throughWalls or hasLineOfSight(v.Character)
+
+                if visible then
+                    local magBuf = (v.Character[lockPart].Position - ray:ClosestPoint(v.Character[lockPart].Position)).Magnitude
+
+                    if magBuf < mag then
+                        mag = magBuf
+                        target = v
+                    end
+                end
+            end
+        end
+    end
+
+    return target
+end
+
+local function updateFOVRing()
+    FOVring.Position = workspace.CurrentCamera.ViewportSize / 2
+end
+
+local function highlightTarget(target)
+    if highlightEnabled and target and target.Character then
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = target.Character
+        highlight.FillColor = Color3.fromRGB(255, 128, 128)
+        highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+        highlight.Parent = target.Character
+    end
+end
+
+local function removeHighlight(target)
+    if highlightEnabled and target and target.Character and target.Character:FindFirstChildOfClass("Highlight") then
+        target.Character:FindFirstChildOfClass("Highlight"):Destroy()
+    end
+end
+
+local function predictPosition(target)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local velocity = target.Character.HumanoidRootPart.Velocity
+        local position = target.Character[lockPart].Position
+        local predictedPosition = position + (velocity * predictionFactor)
+        return predictedPosition
+    end
+    return nil
+end
+
+local function handleToggle()
+    if debounce then return end
+    debounce = true
+    toggleState = not toggleState
+    wait(0.3)
+    debounce = false
+end
+
+loop = RunService.RenderStepped:Connect(function()
+    if aimbotEnabled then
+        updateFOVRing()
+
+        local localPlayer = Players.LocalPlayer.Character
+        local cam = workspace.CurrentCamera
+        local screenCenter = workspace.CurrentCamera.ViewportSize / 2
+
+        if Toggle then
+            if UserInputService:IsKeyDown(ToggleKey) then
+                handleToggle()
+            end
+        else
+            toggleState = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+        end
+
+        if toggleState then
+            -- Si el objetivo quedo bloqueado por una pared y las paredes estan OFF, re-elegir
+            if currentTarget and not throughWalls then
+                if not currentTarget.Character or not currentTarget.Character:FindFirstChild(lockPart) or not hasLineOfSight(currentTarget.Character) then
+                    if highlightEnabled then removeHighlight(currentTarget) end
+                    currentTarget = nil
+                end
+            end
+
+            if not currentTarget then
+                currentTarget = getClosest(cam.CFrame)
+                highlightTarget(currentTarget)
+            end
+
+            if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(lockPart) then
+                local predictedPosition = predictPosition(currentTarget)
+                if predictedPosition then
+                    workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(CFrame.new(cam.CFrame.Position, predictedPosition), smoothing)
+                end
+                FOVring.Color = Color3.fromRGB(0, 255, 0)
+            else
+                FOVring.Color = Color3.fromRGB(255, 128, 128)
+            end
+        else
+            if currentTarget and highlightEnabled then
+                removeHighlight(currentTarget)
+            end
+            currentTarget = nil
+            FOVring.Color = Color3.fromRGB(255, 128, 128)
+        end
+    end
+end)
