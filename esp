@@ -1,0 +1,520 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local plr = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+--==================================================================
+-- AJUSTES
+--==================================================================
+local settings = {
+    enabled = true,
+    ignoreAllies = false,
+    thickness = 2,
+    transparency = 1,
+    enemyColor = Color3.fromRGB(255, 0, 0),
+    allyColor = Color3.fromRGB(0, 255, 0),
+}
+
+local espData = {}   -- [Player] = { lines = {4 Line}, enabled = bool }
+
+local addPlayerRow, removePlayerRow  -- forward declaration
+
+--==================================================================
+-- NUCLEO DEL ESP
+--==================================================================
+local function createESP(target)
+    if target == plr or espData[target] then return end
+
+    local lines = {}
+    for i = 1, 4 do
+        local l = Drawing.new("Line")
+        l.Visible = false
+        l.From = Vector2.new(0, 0)
+        l.To = Vector2.new(0, 0)
+        l.Color = settings.enemyColor
+        l.Thickness = settings.thickness
+        l.Transparency = settings.transparency
+        lines[i] = l
+    end
+
+    espData[target] = { lines = lines, enabled = true }
+
+    if addPlayerRow then
+        addPlayerRow(target)
+    end
+end
+
+local function removeESP(target)
+    local data = espData[target]
+    if not data then return end
+    for _, l in ipairs(data.lines) do
+        l:Remove()
+    end
+    espData[target] = nil
+end
+
+local function updateESP()
+    for target, data in pairs(espData) do
+        local lines = data.lines
+        local char = target.Character
+
+        local ok = settings.enabled
+            and data.enabled
+            and target ~= plr
+            and char ~= nil
+            and char:FindFirstChild("HumanoidRootPart") ~= nil
+            and char:FindFirstChild("Head") ~= nil
+            and char:FindFirstChild("Humanoid") ~= nil
+            and char.Humanoid.Health > 0
+
+        if ok and settings.ignoreAllies and target.TeamColor == plr.TeamColor then
+            ok = false
+        end
+
+        if ok then
+            local root = char.HumanoidRootPart
+            local ScreenPos, OnScreen = camera:WorldToViewportPoint(root.Position)
+
+            if OnScreen then
+                local Scale = char.Head.Size.Y / 2
+                local Size = Vector3.new(2, 3, 0) * (Scale * 2)
+
+                local TL = camera:WorldToViewportPoint((root.CFrame * CFrame.new(Size.X, Size.Y, 0)).p)
+                local TR = camera:WorldToViewportPoint((root.CFrame * CFrame.new(-Size.X, Size.Y, 0)).p)
+                local BL = camera:WorldToViewportPoint((root.CFrame * CFrame.new(Size.X, -Size.Y, 0)).p)
+                local BR = camera:WorldToViewportPoint((root.CFrame * CFrame.new(-Size.X, -Size.Y, 0)).p)
+
+                lines[1].From = Vector2.new(TL.X, TL.Y)   -- Top
+                lines[1].To = Vector2.new(TR.X, TR.Y)
+                lines[2].From = Vector2.new(TL.X, TL.Y)   -- Left
+                lines[2].To = Vector2.new(BL.X, BL.Y)
+                lines[3].From = Vector2.new(TR.X, TR.Y)   -- Right
+                lines[3].To = Vector2.new(BR.X, BR.Y)
+                lines[4].From = Vector2.new(BL.X, BL.Y)   -- Bottom
+                lines[4].To = Vector2.new(BR.X, BR.Y)
+
+                local col = (target.TeamColor == plr.TeamColor) and settings.allyColor or settings.enemyColor
+                for _, l in ipairs(lines) do
+                    l.Color = col
+                    l.Visible = true
+                end
+            else
+                for _, l in ipairs(lines) do l.Visible = false end
+            end
+        else
+            for _, l in ipairs(lines) do l.Visible = false end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(updateESP)
+
+--==================================================================
+-- GUI (abre/cierra con la tecla GUI, por defecto RightShift)
+--==================================================================
+local playerGui = plr:WaitForChild("PlayerGui")
+
+local function corner(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 6)
+    c.Parent = obj
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "ESP_GUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 250, 0, 520)
+main.Position = UDim2.new(0, 20, 0.5, -260)
+main.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
+main.BorderSizePixel = 0
+main.Visible = false
+main.Active = true
+main.Parent = gui
+corner(main, 8)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 28)
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+title.BorderSizePixel = 0
+title.Text = "ESP  -  [RightShift]"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.Parent = main
+corner(title, 8)
+
+local function mkRow(y, h)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -12, 0, h or 26)
+    f.Position = UDim2.new(0, 6, 0, y)
+    f.BackgroundTransparency = 1
+    f.Parent = main
+    return f
+end
+
+local function mkBtn(parent, text, x, w, color)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(w, 0, 1, 0)
+    b.Position = UDim2.new(x, 0, 0, 0)
+    b.BackgroundColor3 = color
+    b.BorderSizePixel = 0
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.Font = Enum.Font.GothamMedium
+    b.TextSize = 12
+    b.Parent = parent
+    corner(b, 6)
+    return b
+end
+
+local function mkLabel(parent, text)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(230, 230, 240)
+    l.Font = Enum.Font.GothamMedium
+    l.TextSize = 12
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = parent
+    return l
+end
+
+--=========================== INTERRUPTORES ===========================
+local espRow = mkRow(32)
+local espBtn = mkBtn(espRow, "ESP: ON", 0, 1, Color3.fromRGB(38, 128, 62))
+
+local function refreshEspBtn()
+    if settings.enabled then
+        espBtn.Text = "ESP: ON"
+        espBtn.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
+    else
+        espBtn.Text = "ESP: OFF"
+        espBtn.BackgroundColor3 = Color3.fromRGB(120, 42, 42)
+    end
+end
+
+espBtn.MouseButton1Click:Connect(function()
+    settings.enabled = not settings.enabled
+    refreshEspBtn()
+end)
+
+local allyRow = mkRow(62)
+local allyBtn = mkBtn(allyRow, "Ignorar aliados", 0, 1, Color3.fromRGB(45, 90, 150))
+
+local function refreshAllyBtn()
+    if settings.ignoreAllies then
+        allyBtn.Text = "Ignorar aliados: ON"
+        allyBtn.BackgroundColor3 = Color3.fromRGB(45, 90, 150)
+    else
+        allyBtn.Text = "Ignorar aliados: OFF"
+        allyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    end
+end
+
+allyBtn.MouseButton1Click:Connect(function()
+    settings.ignoreAllies = not settings.ignoreAllies
+    refreshAllyBtn()
+end)
+
+--=========================== COLORES ===========================
+local enemyPalette = {
+    Color3.fromRGB(255, 0, 0),
+    Color3.fromRGB(255, 128, 0),
+    Color3.fromRGB(255, 255, 0),
+    Color3.fromRGB(255, 0, 255),
+    Color3.fromRGB(0, 255, 255),
+    Color3.fromRGB(255, 255, 255),
+}
+local allyPalette = {
+    Color3.fromRGB(0, 255, 0),
+    Color3.fromRGB(0, 128, 255),
+    Color3.fromRGB(0, 255, 255),
+    Color3.fromRGB(255, 255, 0),
+    Color3.fromRGB(255, 255, 255),
+}
+local enemyIdx, allyIdx = 1, 1
+
+local colorRow = mkRow(92)
+local enemyColorBtn = mkBtn(colorRow, "Color enemigo", 0, 0.48, settings.enemyColor)
+local allyColorBtn = mkBtn(colorRow, "Color aliado", 0.52, 0.48, settings.allyColor)
+
+enemyColorBtn.MouseButton1Click:Connect(function()
+    enemyIdx = enemyIdx % #enemyPalette + 1
+    settings.enemyColor = enemyPalette[enemyIdx]
+    enemyColorBtn.BackgroundColor3 = settings.enemyColor
+end)
+
+allyColorBtn.MouseButton1Click:Connect(function()
+    allyIdx = allyIdx % #allyPalette + 1
+    settings.allyColor = allyPalette[allyIdx]
+    allyColorBtn.BackgroundColor3 = settings.allyColor
+end)
+
+--=========================== SLIDERS ===========================
+local thickLblRow = mkRow(122, 16)
+local thickLabel = mkLabel(thickLblRow, "Grosor: " .. settings.thickness)
+
+local transpLblRow = mkRow(166, 16)
+local transpLabel = mkLabel(transpLblRow, string.format("Transparencia: %.1f", settings.transparency))
+
+local function makeSlider(parent, y, min, max, default, step, onChange)
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -12, 0, 18)
+    track.Position = UDim2.new(0, 6, 0, y)
+    track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    track.BorderSizePixel = 0
+    track.Active = true
+    track.Parent = parent
+    corner(track, 9)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(80, 140, 220)
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    corner(fill, 9)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(0, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(235, 235, 245)
+    knob.BorderSizePixel = 0
+    knob.Parent = track
+    corner(knob, 7)
+
+    local dragging = false
+
+    local function setFromX(x)
+        local rel = (x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1)
+        rel = math.clamp(rel, 0, 1)
+        local value = min + (max - min) * rel
+        value = math.floor(value / step + 0.5) * step
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        knob.Position = UDim2.new(rel, 0, 0.5, 0)
+        onChange(value)
+    end
+
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    local rel0 = (default - min) / (max - min)
+    fill.Size = UDim2.new(rel0, 0, 1, 0)
+    knob.Position = UDim2.new(rel0, 0, 0.5, 0)
+    onChange(default)
+end
+
+makeSlider(main, 142, 1, 6, settings.thickness, 1, function(v)
+    settings.thickness = v
+    thickLabel.Text = "Grosor: " .. v
+    for _, data in pairs(espData) do
+        for _, l in ipairs(data.lines) do
+            l.Thickness = v
+        end
+    end
+end)
+
+makeSlider(main, 186, 0, 1, settings.transparency, 0.1, function(v)
+    settings.transparency = v
+    transpLabel.Text = string.format("Transparencia: %.1f", v)
+    for _, data in pairs(espData) do
+        for _, l in ipairs(data.lines) do
+            l.Transparency = v
+        end
+    end
+end)
+
+--=========================== REBINDEO DE TECLA ===========================
+local guiKey = Enum.KeyCode.RightShift
+local listening = false
+
+local keyRow = mkRow(212)
+local keyBtn = mkBtn(keyRow, "Tecla GUI", 0, 1, Color3.fromRGB(60, 60, 100))
+
+local function refreshKeyBtn()
+    if listening then
+        keyBtn.Text = "Presiona tecla...  (Escape cancela)"
+        keyBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
+    else
+        keyBtn.Text = "Tecla GUI: " .. guiKey.Name
+        keyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+    end
+    title.Text = "ESP  -  [" .. guiKey.Name .. "]"
+end
+
+keyBtn.MouseButton1Click:Connect(function()
+    listening = not listening
+    refreshKeyBtn()
+end)
+
+--=========================== LISTA DE JUGADORES ===========================
+local list = Instance.new("ScrollingFrame")
+list.Size = UDim2.new(1, -12, 1, -278)
+list.Position = UDim2.new(0, 6, 0, 244)
+list.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 4
+list.CanvasSize = UDim2.new(0, 0, 0, 0)
+list.Parent = main
+corner(list, 6)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.Parent = list
+
+local pad = Instance.new("UIPadding")
+pad.PaddingLeft = UDim.new(0, 4)
+pad.PaddingRight = UDim.new(0, 4)
+pad.PaddingTop = UDim.new(0, 4)
+pad.Parent = list
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    list.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+end)
+
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(1, -12, 0, 16)
+hint.Position = UDim2.new(0, 6, 1, -20)
+hint.BackgroundTransparency = 1
+hint.Text = "Clic = encender/apagar ESP de ese jugador"
+hint.TextColor3 = Color3.fromRGB(150, 150, 160)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 10
+hint.Parent = main
+
+local rows = {}
+
+local function refreshRow(target)
+    local r = rows[target]
+    local data = espData[target]
+    if not r or not data then return end
+    if data.enabled then
+        r.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
+        r.Text = "  ESP ON   " .. target.Name
+    else
+        r.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
+        r.Text = "  ESP OFF  " .. target.Name
+    end
+end
+
+addPlayerRow = function(target)
+    if rows[target] then return end
+    local r = Instance.new("TextButton")
+    r.Name = target.Name
+    r.Size = UDim2.new(1, -8, 0, 26)
+    r.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
+    r.BorderSizePixel = 0
+    r.TextColor3 = Color3.fromRGB(255, 255, 255)
+    r.TextXAlignment = Enum.TextXAlignment.Left
+    r.Font = Enum.Font.GothamMedium
+    r.TextSize = 12
+    r.Text = "  " .. target.Name
+    r.Parent = list
+    corner(r, 6)
+    rows[target] = r
+
+    r.MouseButton1Click:Connect(function()
+        local data = espData[target]
+        if data then
+            data.enabled = not data.enabled
+            refreshRow(target)
+        end
+    end)
+
+    refreshRow(target)
+end
+
+removePlayerRow = function(target)
+    if rows[target] then
+        rows[target]:Destroy()
+        rows[target] = nil
+    end
+end
+
+--=========================== INPUT GLOBAL ===========================
+UserInputService.InputBegan:Connect(function(input)
+    if listening then
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+        if input.KeyCode == Enum.KeyCode.Escape then
+            listening = false
+        elseif input.KeyCode ~= Enum.KeyCode.Unknown then
+            guiKey = input.KeyCode
+            listening = false
+        else
+            return
+        end
+
+        refreshKeyBtn()
+        return
+    end
+
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == guiKey then
+        main.Visible = not main.Visible
+    end
+end)
+
+-- Arrastrar la ventana
+local dragging, dragStart, startPos
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+--=========================== ARRANQUE ===========================
+for _, p in ipairs(Players:GetPlayers()) do
+    createESP(p)
+end
+
+Players.PlayerAdded:Connect(function(newplr)
+    createESP(newplr)
+end)
+
+Players.PlayerRemoving:Connect(function(leaving)
+    removeESP(leaving)
+    removePlayerRow(leaving)
+end)
+
+refreshEspBtn()
+refreshAllyBtn()
+refreshKeyBtn()
