@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0d12">
+<title>Aadil Skip</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0b0d12;--card:#141821;--card2:#1b2130;--line:#252d3d;--tx:#e8edf7;--dim:#8892a6;--acc:#4f8cff;--ok:#25c281;--bad:#ff5f6d}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:18px;max-width:640px;margin:0 auto}
+h1{font-size:20px;margin:0 0 2px;letter-spacing:-.3px}
+h1 span{color:var(--acc)}
+.sub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+label{display:block;font-size:12px;color:var(--dim);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.6px}
+textarea,input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:12px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:none}
+textarea:focus,input:focus{border-color:var(--acc)}
+textarea{min-height:88px}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{border:0;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);color:var(--tx);transition:.15s;flex:1;min-width:120px}
+button:hover{filter:brightness(1.25)}
+button:disabled{opacity:.45;cursor:default}
+.primary{background:var(--acc);color:#fff}
+.ok{background:var(--ok);color:#04120c}
+.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:500}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:16px}
+.hide{display:none}
+#log{font:11.5px/1.6 ui-monospace,Menlo,monospace;color:var(--dim);white-space:pre-wrap;word-break:break-all;max-height:230px;overflow:auto}
+#log b{color:var(--tx);font-weight:600}
+#log .g{color:var(--ok)}#log .r{color:var(--bad)}
+#dest{font:12.5px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;background:#0f131b;border:1px solid var(--line);border-radius:10px;padding:10px;color:#a8ffd8}
+.count{font-size:12px;color:var(--dim);margin-top:8px}
+.item{border-bottom:1px solid var(--line);padding:10px 0;font-size:12px}
+.item:last-child{border:0}
+.item a{color:var(--acc);word-break:break-all;text-decoration:none;font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.item .k{color:var(--dim);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.del{background:none;border:0;color:var(--bad);padding:0;font-size:11px;cursor:pointer;flex:0;min-width:auto;margin-left:8px}
+.tabs{display:flex;gap:6px;margin-bottom:4px}
+.tabs button{flex:1;background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:500;padding:9px;font-size:13px}
+.tabs button.on{background:var(--card2);color:var(--tx);border-color:var(--acc)}
+</style>
+</head>
+<body>
+
+<h1>Aadil <span>Skip</span></h1>
+<div class="sub">Pega el link, salta el gate de 4 pasos.</div>
+
+<div class="tabs">
+  <button id="tabA" class="on" onclick="tab(0)">Saltar</button>
+  <button id="tabB" onclick="tab(1)">Pares guardados</button>
+</div>
+
+<div id="paneA">
+  <label>Link de links.aadilmods.com</label>
+  <textarea id="src" placeholder="https://links.aadilmods.com/link?data=..."></textarea>
+  <div class="row">
+    <button class="primary" id="goBtn" onclick="go()">Resolver y saltar</button>
+    <button class="ghost" onclick="openRaw()">Abrir original</button>
+  </div>
+
+  <div class="card hide" id="resCard">
+    <label style="margin-top:0">Destino</label>
+    <div id="dest"></div>
+    <div class="count" id="cnt"></div>
+    <div class="row">
+      <button class="ok" onclick="jump()">Ir ahora</button>
+      <button onclick="savePair()">Guardar par</button>
+      <button class="ghost" onclick="copyDest()">Copiar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label style="margin-top:0">Diagnóstico</label>
+    <div id="log">Sin ejecutar.</div>
+    <div class="row"><button class="ghost" onclick="document.getElementById('log').textContent='Sin ejecutar.'">Limpiar</button></div>
+  </div>
+</div>
+
+<div id="paneB" class="hide">
+  <label>Guardar par manual (link corto → destino final)</label>
+  <input id="kIn" placeholder="link corto o su parámetro data">
+  <input id="vIn" placeholder="https://destino-final..." style="margin-top:8px">
+  <div class="row"><button class="primary" onclick="addPair()">Guardar par</button></div>
+  <div class="card"><div id="list"></div></div>
+</div>
+
+<script>
+const KEY='aadil_pairs_v1';
+const $=id=>document.getElementById(id);
+const pairs=()=>JSON.parse(localStorage.getItem(KEY)||'{}');
+const setPairs=o=>localStorage.setItem(KEY,JSON.stringify(o));
+let DEST='',TIMER=null;
+
+function tab(n){
+  $('paneA').classList.toggle('hide',n===1);
+  $('paneB').classList.toggle('hide',n===0);
+  $('tabA').classList.toggle('on',n===0);
+  $('tabB').classList.toggle('on',n===1);
+  if(n===1) renderList();
+}
+function logLine(t,cls=''){
+  const l=$('log');
+  if(l.textContent==='Sin ejecutar.') l.textContent='';
+  l.innerHTML+=`<span class="${cls}">${t}</span>\n`;
+  l.scrollTop=l.scrollHeight;
+}
+const dataOf=u=>{try{return new URL(u).searchParams.get('data')||''}catch(e){return ''}};
+
+function renderList(){
+  const p=pairs(), ks=Object.keys(p);
+  $('list').innerHTML = ks.length ? ks.map(k=>
+    `<div class="item"><div class="k">${k.slice(0,28)}…</div>
+     <a href="${p[k]}" target="_blank" rel="noopener">${p[k].slice(0,70)}…</a>
+     <button class="del" onclick="delPair('${k}')">borrar</button></div>`).join('')
+    : '<div style="color:var(--dim);font-size:12.5px">Nada guardado aún.</div>';
+}
+function addPair(){
+  const k=dataOf($('kIn').value)||$('kIn').value.trim();
+  const v=$('vIn').value.trim();
+  if(!k||!v){alert('Faltan datos');return}
+  const p=pairs(); p[k]=v; setPairs(p);
+  $('kIn').value='';$('vIn').value=''; renderList();
+}
+function delPair(k){const p=pairs();delete p[k];setPairs(p);renderList()}
+function savePair(){
+  const d=dataOf($('src').value); if(!d||!DEST) return;
+  const p=pairs(); p[d]=DEST; setPairs(p); logLine('› Par guardado.','g');
+}
+
+const SKIP=/\.(css|js|png|jpe?g|svg|woff2?|ico|gif|webp|map)(\?|$)/i;
+const NOISE=/googletagmanager|google-analytics|gstatic|fonts\.googleapis|doubleclick|adsbygoogle|cloudflareinsights|jquery|cdnjs|unpkg|jsdelivr|w3\.org/i;
+const GOOD=/script\.google\.com\/macros|drive\.google\.com|docs\.google\.com|mediafire\.com|mega\.nz|dropbox\.com|github\.com|pixeldrain|gofile|1fichier|workupload|sourceforge/i;
+
+function findUrls(txt){
+  const re=/https?:\/\/[^\s"'<>\\)\]}\u00a0]+/gi,out=new Set(); let m;
+  while((m=re.exec(txt))){
+    let u=m[0].replace(/[.,;:]+$/,'');
+    if(SKIP.test(u)||NOISE.test(u))continue;
+    if(/links\.aadilmods\.com/.test(u))continue;
+    if(u.length<16)continue;
+    out.add(u);
+  }
+  return [...out];
+}
+function best(urls){
+  return urls.sort((a,b)=>(GOOD.test(b)?1:0)-(GOOD.test(a)?1:0)||b.length-a.length)[0]||'';
+}
+
+function decodeBlob(hex){
+  const out=[];
+  try{
+    const b=new Uint8Array(hex.match(/../g).map(h=>parseInt(h,16)));
+    const txt=new TextDecoder('utf-8').decode(b);
+    const pr=(txt.match(/[\x20-\x7e]/g)||[]).length/txt.length;
+    out.push(['UTF-8 plano',pr.toFixed(2),findUrls(txt)[0]||'']);
+    for(let k=0;k<256;k++){
+      let s='';for(let i=0;i<Math.min(b.length,400);i++)s+=String.fromCharCode(b[i]^k);
+      if(/https?:\/\//.test(s)){out.push(['XOR '+k,'',findUrls(s)[0]||'']);break}
+    }
+  }catch(e){}
+  return out;
+}
+
+async function fetchT(u,ms=9000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms);
+  try{
+    const r=await fetch(u,{signal:c.signal,redirect:'follow',headers:{'Accept':'text/html,*/*'}});
+    return {ok:r.ok,status:r.status,text:await r.text()};
+  }catch(e){return {ok:false,status:0,text:'',err:e.message}}
+  finally{clearTimeout(t)}
+}
+
+async function go(){
+  const raw=$('src').value.trim();
+  $('resCard').classList.add('hide'); DEST=''; clearInterval(TIMER);
+  $('log').textContent=''; $('goBtn').disabled=true;
+
+  let url; try{url=new URL(raw)}catch(e){logLine('✗ URL inválida','r');$('goBtn').disabled=false;return}
+  if(!/aadilmods\.com$/.test(url.hostname)) logLine('! No es de aadilmods, igual lo intento');
+  const data=dataOf(url.href);
+  logLine('› Link: '+url.hostname+(data?' · data de '+data.length+' chars':' (sin data)'));
+
+  // 1) par guardado
+  const p=pairs();
+  if(data&&p[data]){logLine('✓ Par guardado, salto directo.','g');show(p[data]);$('goBtn').disabled=false;return}
+
+  // 2) decodificación local
+  if(data) decodeBlob(data).forEach(([n,pr,u])=>logLine(`  ${n}${pr?' (legible '+pr+')':''} ${u?'→ '+u:'— sin URL'}`));
+
+  // 3) resolver vía proxies
+  const P=[
+    ['directo',u=>u],
+    ['allorigins','u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)],
+    ['corsproxy','u=>"https://corsproxy.io/?url="+encodeURIComponent(u)],
+    ['codetabs','u=>"https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u)],
+    ['jina','u=>"https://r.jina.ai/"+u]
+  ];
+  let found='';
+  for(const [name,fn] of P){
+    const f=fn.toString().includes('=>')?fn:(()=>u=>u)();
+    const target=(name==='directo')?url.href:fn(url.href);
+    const r=await fetchT(target);
+    if(!r.ok){logLine(`  ${name}: ✗ ${r.status||r.err||''}`,'r');continue}
+    const u=best(findUrls(r.text));
+    logLine(`  ${name}: ${r.text.length} bytes ${u?'✓ '+u:'· sin URL'}`, u?'g':'');
+    if(u){found=u;break}
+  }
+
+  if(found){show(found)}
+  else{
+    logLine('✗ No resuelto. Abre el original, espera los 4 pasos y guarda el par una vez.','r');
+    $('resCard').classList.remove('hide');
+    $('dest').textContent='— (sin resolver) —';
+    $('cnt').textContent='Usa "Abrir original" y luego guarda el destino en Pares guardados.';
+  }
+  $('goBtn').disabled=false;
+}
+
+function show(u){
+  DEST=u;
+  $('resCard').classList.remove('hide');
+  $('dest').textContent=u;
+  let n=3;
+  $('cnt').textContent=`Abriendo en ${n}s…`;
+  clearInterval(TIMER);
+  TIMER=setInterval(()=>{n--;if(n<=0){clearInterval(TIMER);jump()}else $('cnt').textContent=`Abriendo en ${n}s…`},1000);
+}
+function jump(){if(DEST)window.open(DEST,'_blank','noopener')}
+function copyDest(){if(DEST)navigator.clipboard.writeText(DEST)}
+function openRaw(){const v=$('src').value.trim();if(v)window.open(v,'_blank','noopener')}
+$('src').addEventListener('input',()=>{const d=dataOf($('src').value);if(d&&pairs()[d])logLine('✓ Este link ya tiene par guardado.','g')});
+</script>
+</body>
+</html>
