@@ -1,520 +1,234 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local plr = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0d12">
+<title>Aadil Skip</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0b0d12;--card:#141821;--card2:#1b2130;--line:#252d3d;--tx:#e8edf7;--dim:#8892a6;--acc:#4f8cff;--ok:#25c281;--bad:#ff5f6d}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:18px;max-width:640px;margin:0 auto}
+h1{font-size:20px;margin:0 0 2px;letter-spacing:-.3px}
+h1 span{color:var(--acc)}
+.sub{color:var(--dim);font-size:12.5px;margin-bottom:18px}
+label{display:block;font-size:12px;color:var(--dim);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.6px}
+textarea,input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:12px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:none}
+textarea:focus,input:focus{border-color:var(--acc)}
+textarea{min-height:88px}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{border:0;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);color:var(--tx);transition:.15s;flex:1;min-width:120px}
+button:hover{filter:brightness(1.25)}
+button:disabled{opacity:.45;cursor:default}
+.primary{background:var(--acc);color:#fff}
+.ok{background:var(--ok);color:#04120c}
+.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:500}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:16px}
+.hide{display:none}
+#log{font:11.5px/1.6 ui-monospace,Menlo,monospace;color:var(--dim);white-space:pre-wrap;word-break:break-all;max-height:230px;overflow:auto}
+#log b{color:var(--tx);font-weight:600}
+#log .g{color:var(--ok)}#log .r{color:var(--bad)}
+#dest{font:12.5px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;background:#0f131b;border:1px solid var(--line);border-radius:10px;padding:10px;color:#a8ffd8}
+.count{font-size:12px;color:var(--dim);margin-top:8px}
+.item{border-bottom:1px solid var(--line);padding:10px 0;font-size:12px}
+.item:last-child{border:0}
+.item a{color:var(--acc);word-break:break-all;text-decoration:none;font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.item .k{color:var(--dim);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.del{background:none;border:0;color:var(--bad);padding:0;font-size:11px;cursor:pointer;flex:0;min-width:auto;margin-left:8px}
+.tabs{display:flex;gap:6px;margin-bottom:4px}
+.tabs button{flex:1;background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:500;padding:9px;font-size:13px}
+.tabs button.on{background:var(--card2);color:var(--tx);border-color:var(--acc)}
+</style>
+</head>
+<body>
 
---==================================================================
--- AJUSTES
---==================================================================
-local settings = {
-    enabled = true,
-    ignoreAllies = false,
-    thickness = 2,
-    transparency = 1,
-    enemyColor = Color3.fromRGB(255, 0, 0),
-    allyColor = Color3.fromRGB(0, 255, 0),
+<h1>Aadil <span>Skip</span></h1>
+<div class="sub">Pega el link, salta el gate de 4 pasos.</div>
+
+<div class="tabs">
+  <button id="tabA" class="on" onclick="tab(0)">Saltar</button>
+  <button id="tabB" onclick="tab(1)">Pares guardados</button>
+</div>
+
+<div id="paneA">
+  <label>Link de links.aadilmods.com</label>
+  <textarea id="src" placeholder="https://links.aadilmods.com/link?data=..."></textarea>
+  <div class="row">
+    <button class="primary" id="goBtn" onclick="go()">Resolver y saltar</button>
+    <button class="ghost" onclick="openRaw()">Abrir original</button>
+  </div>
+
+  <div class="card hide" id="resCard">
+    <label style="margin-top:0">Destino</label>
+    <div id="dest"></div>
+    <div class="count" id="cnt"></div>
+    <div class="row">
+      <button class="ok" onclick="jump()">Ir ahora</button>
+      <button onclick="savePair()">Guardar par</button>
+      <button class="ghost" onclick="copyDest()">Copiar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label style="margin-top:0">Diagnóstico</label>
+    <div id="log">Sin ejecutar.</div>
+    <div class="row"><button class="ghost" onclick="document.getElementById('log').textContent='Sin ejecutar.'">Limpiar</button></div>
+  </div>
+</div>
+
+<div id="paneB" class="hide">
+  <label>Guardar par manual (link corto → destino final)</label>
+  <input id="kIn" placeholder="link corto o su parámetro data">
+  <input id="vIn" placeholder="https://destino-final..." style="margin-top:8px">
+  <div class="row"><button class="primary" onclick="addPair()">Guardar par</button></div>
+  <div class="card"><div id="list"></div></div>
+</div>
+
+<script>
+const KEY='aadil_pairs_v1';
+const $=id=>document.getElementById(id);
+const pairs=()=>JSON.parse(localStorage.getItem(KEY)||'{}');
+const setPairs=o=>localStorage.setItem(KEY,JSON.stringify(o));
+let DEST='',TIMER=null;
+
+function tab(n){
+  $('paneA').classList.toggle('hide',n===1);
+  $('paneB').classList.toggle('hide',n===0);
+  $('tabA').classList.toggle('on',n===0);
+  $('tabB').classList.toggle('on',n===1);
+  if(n===1) renderList();
+}
+function logLine(t,cls=''){
+  const l=$('log');
+  if(l.textContent==='Sin ejecutar.') l.textContent='';
+  l.innerHTML+=`<span class="${cls}">${t}</span>\n`;
+  l.scrollTop=l.scrollHeight;
+}
+const dataOf=u=>{try{return new URL(u).searchParams.get('data')||''}catch(e){return ''}};
+
+function renderList(){
+  const p=pairs(), ks=Object.keys(p);
+  $('list').innerHTML = ks.length ? ks.map(k=>
+    `<div class="item"><div class="k">${k.slice(0,28)}…</div>
+     <a href="${p[k]}" target="_blank" rel="noopener">${p[k].slice(0,70)}…</a>
+     <button class="del" onclick="delPair('${k}')">borrar</button></div>`).join('')
+    : '<div style="color:var(--dim);font-size:12.5px">Nada guardado aún.</div>';
+}
+function addPair(){
+  const k=dataOf($('kIn').value)||$('kIn').value.trim();
+  const v=$('vIn').value.trim();
+  if(!k||!v){alert('Faltan datos');return}
+  const p=pairs(); p[k]=v; setPairs(p);
+  $('kIn').value='';$('vIn').value=''; renderList();
+}
+function delPair(k){const p=pairs();delete p[k];setPairs(p);renderList()}
+function savePair(){
+  const d=dataOf($('src').value); if(!d||!DEST) return;
+  const p=pairs(); p[d]=DEST; setPairs(p); logLine('› Par guardado.','g');
 }
 
-local espData = {}   -- [Player] = { lines = {4 Line}, enabled = bool }
+const SKIP=/\.(css|js|png|jpe?g|svg|woff2?|ico|gif|webp|map)(\?|$)/i;
+const NOISE=/googletagmanager|google-analytics|gstatic|fonts\.googleapis|doubleclick|adsbygoogle|cloudflareinsights|jquery|cdnjs|unpkg|jsdelivr|w3\.org/i;
+const GOOD=/script\.google\.com\/macros|drive\.google\.com|docs\.google\.com|mediafire\.com|mega\.nz|dropbox\.com|github\.com|pixeldrain|gofile|1fichier|workupload|sourceforge/i;
 
-local addPlayerRow, removePlayerRow  -- forward declaration
-
---==================================================================
--- NUCLEO DEL ESP
---==================================================================
-local function createESP(target)
-    if target == plr or espData[target] then return end
-
-    local lines = {}
-    for i = 1, 4 do
-        local l = Drawing.new("Line")
-        l.Visible = false
-        l.From = Vector2.new(0, 0)
-        l.To = Vector2.new(0, 0)
-        l.Color = settings.enemyColor
-        l.Thickness = settings.thickness
-        l.Transparency = settings.transparency
-        lines[i] = l
-    end
-
-    espData[target] = { lines = lines, enabled = true }
-
-    if addPlayerRow then
-        addPlayerRow(target)
-    end
-end
-
-local function removeESP(target)
-    local data = espData[target]
-    if not data then return end
-    for _, l in ipairs(data.lines) do
-        l:Remove()
-    end
-    espData[target] = nil
-end
-
-local function updateESP()
-    for target, data in pairs(espData) do
-        local lines = data.lines
-        local char = target.Character
-
-        local ok = settings.enabled
-            and data.enabled
-            and target ~= plr
-            and char ~= nil
-            and char:FindFirstChild("HumanoidRootPart") ~= nil
-            and char:FindFirstChild("Head") ~= nil
-            and char:FindFirstChild("Humanoid") ~= nil
-            and char.Humanoid.Health > 0
-
-        if ok and settings.ignoreAllies and target.TeamColor == plr.TeamColor then
-            ok = false
-        end
-
-        if ok then
-            local root = char.HumanoidRootPart
-            local ScreenPos, OnScreen = camera:WorldToViewportPoint(root.Position)
-
-            if OnScreen then
-                local Scale = char.Head.Size.Y / 2
-                local Size = Vector3.new(2, 3, 0) * (Scale * 2)
-
-                local TL = camera:WorldToViewportPoint((root.CFrame * CFrame.new(Size.X, Size.Y, 0)).p)
-                local TR = camera:WorldToViewportPoint((root.CFrame * CFrame.new(-Size.X, Size.Y, 0)).p)
-                local BL = camera:WorldToViewportPoint((root.CFrame * CFrame.new(Size.X, -Size.Y, 0)).p)
-                local BR = camera:WorldToViewportPoint((root.CFrame * CFrame.new(-Size.X, -Size.Y, 0)).p)
-
-                lines[1].From = Vector2.new(TL.X, TL.Y)   -- Top
-                lines[1].To = Vector2.new(TR.X, TR.Y)
-                lines[2].From = Vector2.new(TL.X, TL.Y)   -- Left
-                lines[2].To = Vector2.new(BL.X, BL.Y)
-                lines[3].From = Vector2.new(TR.X, TR.Y)   -- Right
-                lines[3].To = Vector2.new(BR.X, BR.Y)
-                lines[4].From = Vector2.new(BL.X, BL.Y)   -- Bottom
-                lines[4].To = Vector2.new(BR.X, BR.Y)
-
-                local col = (target.TeamColor == plr.TeamColor) and settings.allyColor or settings.enemyColor
-                for _, l in ipairs(lines) do
-                    l.Color = col
-                    l.Visible = true
-                end
-            else
-                for _, l in ipairs(lines) do l.Visible = false end
-            end
-        else
-            for _, l in ipairs(lines) do l.Visible = false end
-        end
-    end
-end
-
-RunService.RenderStepped:Connect(updateESP)
-
---==================================================================
--- GUI (abre/cierra con la tecla GUI, por defecto RightShift)
---==================================================================
-local playerGui = plr:WaitForChild("PlayerGui")
-
-local function corner(obj, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 6)
-    c.Parent = obj
-end
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "ESP_GUI"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = playerGui
-
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 250, 0, 520)
-main.Position = UDim2.new(0, 20, 0.5, -260)
-main.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
-main.BorderSizePixel = 0
-main.Visible = false
-main.Active = true
-main.Parent = gui
-corner(main, 8)
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 28)
-title.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-title.BorderSizePixel = 0
-title.Text = "ESP  -  [RightShift]"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 13
-title.Parent = main
-corner(title, 8)
-
-local function mkRow(y, h)
-    local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, -12, 0, h or 26)
-    f.Position = UDim2.new(0, 6, 0, y)
-    f.BackgroundTransparency = 1
-    f.Parent = main
-    return f
-end
-
-local function mkBtn(parent, text, x, w, color)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(w, 0, 1, 0)
-    b.Position = UDim2.new(x, 0, 0, 0)
-    b.BackgroundColor3 = color
-    b.BorderSizePixel = 0
-    b.Text = text
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.Font = Enum.Font.GothamMedium
-    b.TextSize = 12
-    b.Parent = parent
-    corner(b, 6)
-    return b
-end
-
-local function mkLabel(parent, text)
-    local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1, 0, 1, 0)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = Color3.fromRGB(230, 230, 240)
-    l.Font = Enum.Font.GothamMedium
-    l.TextSize = 12
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = parent
-    return l
-end
-
---=========================== INTERRUPTORES ===========================
-local espRow = mkRow(32)
-local espBtn = mkBtn(espRow, "ESP: ON", 0, 1, Color3.fromRGB(38, 128, 62))
-
-local function refreshEspBtn()
-    if settings.enabled then
-        espBtn.Text = "ESP: ON"
-        espBtn.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
-    else
-        espBtn.Text = "ESP: OFF"
-        espBtn.BackgroundColor3 = Color3.fromRGB(120, 42, 42)
-    end
-end
-
-espBtn.MouseButton1Click:Connect(function()
-    settings.enabled = not settings.enabled
-    refreshEspBtn()
-end)
-
-local allyRow = mkRow(62)
-local allyBtn = mkBtn(allyRow, "Ignorar aliados", 0, 1, Color3.fromRGB(45, 90, 150))
-
-local function refreshAllyBtn()
-    if settings.ignoreAllies then
-        allyBtn.Text = "Ignorar aliados: ON"
-        allyBtn.BackgroundColor3 = Color3.fromRGB(45, 90, 150)
-    else
-        allyBtn.Text = "Ignorar aliados: OFF"
-        allyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    end
-end
-
-allyBtn.MouseButton1Click:Connect(function()
-    settings.ignoreAllies = not settings.ignoreAllies
-    refreshAllyBtn()
-end)
-
---=========================== COLORES ===========================
-local enemyPalette = {
-    Color3.fromRGB(255, 0, 0),
-    Color3.fromRGB(255, 128, 0),
-    Color3.fromRGB(255, 255, 0),
-    Color3.fromRGB(255, 0, 255),
-    Color3.fromRGB(0, 255, 255),
-    Color3.fromRGB(255, 255, 255),
+function findUrls(txt){
+  const re=/https?:\/\/[^\s"'<>\\)\]}\u00a0]+/gi,out=new Set(); let m;
+  while((m=re.exec(txt))){
+    let u=m[0].replace(/[.,;:]+$/,'');
+    if(SKIP.test(u)||NOISE.test(u))continue;
+    if(/links\.aadilmods\.com/.test(u))continue;
+    if(u.length<16)continue;
+    out.add(u);
+  }
+  return [...out];
 }
-local allyPalette = {
-    Color3.fromRGB(0, 255, 0),
-    Color3.fromRGB(0, 128, 255),
-    Color3.fromRGB(0, 255, 255),
-    Color3.fromRGB(255, 255, 0),
-    Color3.fromRGB(255, 255, 255),
+function best(urls){
+  return urls.sort((a,b)=>(GOOD.test(b)?1:0)-(GOOD.test(a)?1:0)||b.length-a.length)[0]||'';
 }
-local enemyIdx, allyIdx = 1, 1
 
-local colorRow = mkRow(92)
-local enemyColorBtn = mkBtn(colorRow, "Color enemigo", 0, 0.48, settings.enemyColor)
-local allyColorBtn = mkBtn(colorRow, "Color aliado", 0.52, 0.48, settings.allyColor)
+function decodeBlob(hex){
+  const out=[];
+  try{
+    const b=new Uint8Array(hex.match(/../g).map(h=>parseInt(h,16)));
+    const txt=new TextDecoder('utf-8').decode(b);
+    const pr=(txt.match(/[\x20-\x7e]/g)||[]).length/txt.length;
+    out.push(['UTF-8 plano',pr.toFixed(2),findUrls(txt)[0]||'']);
+    for(let k=0;k<256;k++){
+      let s='';for(let i=0;i<Math.min(b.length,400);i++)s+=String.fromCharCode(b[i]^k);
+      if(/https?:\/\//.test(s)){out.push(['XOR '+k,'',findUrls(s)[0]||'']);break}
+    }
+  }catch(e){}
+  return out;
+}
 
-enemyColorBtn.MouseButton1Click:Connect(function()
-    enemyIdx = enemyIdx % #enemyPalette + 1
-    settings.enemyColor = enemyPalette[enemyIdx]
-    enemyColorBtn.BackgroundColor3 = settings.enemyColor
-end)
+async function fetchT(u,ms=9000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms);
+  try{
+    const r=await fetch(u,{signal:c.signal,redirect:'follow',headers:{'Accept':'text/html,*/*'}});
+    return {ok:r.ok,status:r.status,text:await r.text()};
+  }catch(e){return {ok:false,status:0,text:'',err:e.message}}
+  finally{clearTimeout(t)}
+}
 
-allyColorBtn.MouseButton1Click:Connect(function()
-    allyIdx = allyIdx % #allyPalette + 1
-    settings.allyColor = allyPalette[allyIdx]
-    allyColorBtn.BackgroundColor3 = settings.allyColor
-end)
+async function go(){
+  const raw=$('src').value.trim();
+  $('resCard').classList.add('hide'); DEST=''; clearInterval(TIMER);
+  $('log').textContent=''; $('goBtn').disabled=true;
 
---=========================== SLIDERS ===========================
-local thickLblRow = mkRow(122, 16)
-local thickLabel = mkLabel(thickLblRow, "Grosor: " .. settings.thickness)
+  let url; try{url=new URL(raw)}catch(e){logLine('✗ URL inválida','r');$('goBtn').disabled=false;return}
+  if(!/aadilmods\.com$/.test(url.hostname)) logLine('! No es de aadilmods, igual lo intento');
+  const data=dataOf(url.href);
+  logLine('› Link: '+url.hostname+(data?' · data de '+data.length+' chars':' (sin data)'));
 
-local transpLblRow = mkRow(166, 16)
-local transpLabel = mkLabel(transpLblRow, string.format("Transparencia: %.1f", settings.transparency))
+  // 1) par guardado
+  const p=pairs();
+  if(data&&p[data]){logLine('✓ Par guardado, salto directo.','g');show(p[data]);$('goBtn').disabled=false;return}
 
-local function makeSlider(parent, y, min, max, default, step, onChange)
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, -12, 0, 18)
-    track.Position = UDim2.new(0, 6, 0, y)
-    track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    track.BorderSizePixel = 0
-    track.Active = true
-    track.Parent = parent
-    corner(track, 9)
+  // 2) decodificación local
+  if(data) decodeBlob(data).forEach(([n,pr,u])=>logLine(`  ${n}${pr?' (legible '+pr+')':''} ${u?'→ '+u:'— sin URL'}`));
 
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(80, 140, 220)
-    fill.BorderSizePixel = 0
-    fill.Parent = track
-    corner(fill, 9)
+  // 3) resolver vía proxies
+  const P=[
+    ['directo',u=>u],
+    ['allorigins','u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)],
+    ['corsproxy','u=>"https://corsproxy.io/?url="+encodeURIComponent(u)],
+    ['codetabs','u=>"https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u)],
+    ['jina','u=>"https://r.jina.ai/"+u]
+  ];
+  let found='';
+  for(const [name,fn] of P){
+    const f=fn.toString().includes('=>')?fn:(()=>u=>u)();
+    const target=(name==='directo')?url.href:fn(url.href);
+    const r=await fetchT(target);
+    if(!r.ok){logLine(`  ${name}: ✗ ${r.status||r.err||''}`,'r');continue}
+    const u=best(findUrls(r.text));
+    logLine(`  ${name}: ${r.text.length} bytes ${u?'✓ '+u:'· sin URL'}`, u?'g':'');
+    if(u){found=u;break}
+  }
 
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.AnchorPoint = Vector2.new(0.5, 0.5)
-    knob.Position = UDim2.new(0, 0, 0.5, 0)
-    knob.BackgroundColor3 = Color3.fromRGB(235, 235, 245)
-    knob.BorderSizePixel = 0
-    knob.Parent = track
-    corner(knob, 7)
+  if(found){show(found)}
+  else{
+    logLine('✗ No resuelto. Abre el original, espera los 4 pasos y guarda el par una vez.','r');
+    $('resCard').classList.remove('hide');
+    $('dest').textContent='— (sin resolver) —';
+    $('cnt').textContent='Usa "Abrir original" y luego guarda el destino en Pares guardados.';
+  }
+  $('goBtn').disabled=false;
+}
 
-    local dragging = false
-
-    local function setFromX(x)
-        local rel = (x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1)
-        rel = math.clamp(rel, 0, 1)
-        local value = min + (max - min) * rel
-        value = math.floor(value / step + 0.5) * step
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        knob.Position = UDim2.new(rel, 0, 0.5, 0)
-        onChange(value)
-    end
-
-    track.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            setFromX(input.Position.X)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            setFromX(input.Position.X)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    local rel0 = (default - min) / (max - min)
-    fill.Size = UDim2.new(rel0, 0, 1, 0)
-    knob.Position = UDim2.new(rel0, 0, 0.5, 0)
-    onChange(default)
-end
-
-makeSlider(main, 142, 1, 6, settings.thickness, 1, function(v)
-    settings.thickness = v
-    thickLabel.Text = "Grosor: " .. v
-    for _, data in pairs(espData) do
-        for _, l in ipairs(data.lines) do
-            l.Thickness = v
-        end
-    end
-end)
-
-makeSlider(main, 186, 0, 1, settings.transparency, 0.1, function(v)
-    settings.transparency = v
-    transpLabel.Text = string.format("Transparencia: %.1f", v)
-    for _, data in pairs(espData) do
-        for _, l in ipairs(data.lines) do
-            l.Transparency = v
-        end
-    end
-end)
-
---=========================== REBINDEO DE TECLA ===========================
-local guiKey = Enum.KeyCode.RightShift
-local listening = false
-
-local keyRow = mkRow(212)
-local keyBtn = mkBtn(keyRow, "Tecla GUI", 0, 1, Color3.fromRGB(60, 60, 100))
-
-local function refreshKeyBtn()
-    if listening then
-        keyBtn.Text = "Presiona tecla...  (Escape cancela)"
-        keyBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
-    else
-        keyBtn.Text = "Tecla GUI: " .. guiKey.Name
-        keyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
-    end
-    title.Text = "ESP  -  [" .. guiKey.Name .. "]"
-end
-
-keyBtn.MouseButton1Click:Connect(function()
-    listening = not listening
-    refreshKeyBtn()
-end)
-
---=========================== LISTA DE JUGADORES ===========================
-local list = Instance.new("ScrollingFrame")
-list.Size = UDim2.new(1, -12, 1, -278)
-list.Position = UDim2.new(0, 6, 0, 244)
-list.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
-list.BorderSizePixel = 0
-list.ScrollBarThickness = 4
-list.CanvasSize = UDim2.new(0, 0, 0, 0)
-list.Parent = main
-corner(list, 6)
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 4)
-layout.Parent = list
-
-local pad = Instance.new("UIPadding")
-pad.PaddingLeft = UDim.new(0, 4)
-pad.PaddingRight = UDim.new(0, 4)
-pad.PaddingTop = UDim.new(0, 4)
-pad.Parent = list
-
-layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    list.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
-end)
-
-local hint = Instance.new("TextLabel")
-hint.Size = UDim2.new(1, -12, 0, 16)
-hint.Position = UDim2.new(0, 6, 1, -20)
-hint.BackgroundTransparency = 1
-hint.Text = "Clic = encender/apagar ESP de ese jugador"
-hint.TextColor3 = Color3.fromRGB(150, 150, 160)
-hint.Font = Enum.Font.Gotham
-hint.TextSize = 10
-hint.Parent = main
-
-local rows = {}
-
-local function refreshRow(target)
-    local r = rows[target]
-    local data = espData[target]
-    if not r or not data then return end
-    if data.enabled then
-        r.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
-        r.Text = "  ESP ON   " .. target.Name
-    else
-        r.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
-        r.Text = "  ESP OFF  " .. target.Name
-    end
-end
-
-addPlayerRow = function(target)
-    if rows[target] then return end
-    local r = Instance.new("TextButton")
-    r.Name = target.Name
-    r.Size = UDim2.new(1, -8, 0, 26)
-    r.BackgroundColor3 = Color3.fromRGB(38, 128, 62)
-    r.BorderSizePixel = 0
-    r.TextColor3 = Color3.fromRGB(255, 255, 255)
-    r.TextXAlignment = Enum.TextXAlignment.Left
-    r.Font = Enum.Font.GothamMedium
-    r.TextSize = 12
-    r.Text = "  " .. target.Name
-    r.Parent = list
-    corner(r, 6)
-    rows[target] = r
-
-    r.MouseButton1Click:Connect(function()
-        local data = espData[target]
-        if data then
-            data.enabled = not data.enabled
-            refreshRow(target)
-        end
-    end)
-
-    refreshRow(target)
-end
-
-removePlayerRow = function(target)
-    if rows[target] then
-        rows[target]:Destroy()
-        rows[target] = nil
-    end
-end
-
---=========================== INPUT GLOBAL ===========================
-UserInputService.InputBegan:Connect(function(input)
-    if listening then
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-
-        if input.KeyCode == Enum.KeyCode.Escape then
-            listening = false
-        elseif input.KeyCode ~= Enum.KeyCode.Unknown then
-            guiKey = input.KeyCode
-            listening = false
-        else
-            return
-        end
-
-        refreshKeyBtn()
-        return
-    end
-
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == guiKey then
-        main.Visible = not main.Visible
-    end
-end)
-
--- Arrastrar la ventana
-local dragging, dragStart, startPos
-title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = main.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        main.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
---=========================== ARRANQUE ===========================
-for _, p in ipairs(Players:GetPlayers()) do
-    createESP(p)
-end
-
-Players.PlayerAdded:Connect(function(newplr)
-    createESP(newplr)
-end)
-
-Players.PlayerRemoving:Connect(function(leaving)
-    removeESP(leaving)
-    removePlayerRow(leaving)
-end)
-
-refreshEspBtn()
-refreshAllyBtn()
-refreshKeyBtn()
+function show(u){
+  DEST=u;
+  $('resCard').classList.remove('hide');
+  $('dest').textContent=u;
+  let n=3;
+  $('cnt').textContent=`Abriendo en ${n}s…`;
+  clearInterval(TIMER);
+  TIMER=setInterval(()=>{n--;if(n<=0){clearInterval(TIMER);jump()}else $('cnt').textContent=`Abriendo en ${n}s…`},1000);
+}
+function jump(){if(DEST)window.open(DEST,'_blank','noopener')}
+function copyDest(){if(DEST)navigator.clipboard.writeText(DEST)}
+function openRaw(){const v=$('src').value.trim();if(v)window.open(v,'_blank','noopener')}
+$('src').addEventListener('input',()=>{const d=dataOf($('src').value);if(d&&pairs()[d])logLine('✓ Este link ya tiene par guardado.','g')});
+</script>
+</body>
+</html>
